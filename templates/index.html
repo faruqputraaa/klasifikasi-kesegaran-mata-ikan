@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fish Freshness Classifier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
+    <style>
+        .cropper-container { margin: 0 auto; }
+        .cropper-bg { background-image: none !important; }
+        .cropper-modal { opacity: 0.7 !important; background-color: #000 !important; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-blue-50">
+
+    <!-- Loading Screen -->
+    <!-- Google Fonts: Righteous -->
+    <link href="https://fonts.googleapis.com/css2?family=Righteous&display=swap" rel="stylesheet">
+    <div id="loading-screen" class="fixed inset-0 bg-blue-500 flex flex-col items-center justify-center z-50 transition-opacity duration-1000" style="font-family: 'Righteous', cursive;">
+        <img src="/static/logo.png" alt="Logo" class="w-48 h-48 mb-4">
+        <p class="mt-4 text-4xl font-extrabold text-white animate-blink" style="font-family: 'Righteous', cursive;">DEEPFISH</p>
+        <style>
+            @keyframes blink {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.2; }
+            }
+            .animate-blink {
+                animation: blink 1s infinite;
+            }
+            #loading-screen, #loading-screen * {
+                font-family: 'Righteous', cursive !important;
+            }
+        </style>
+    </div>
+
+    <!-- Main Content -->
+    <div id="main-content" class="hidden w-full max-w-4xl mx-auto p-4 min-h-screen flex flex-col items-center justify-center">
+        <header class="text-center mb-8">
+            <img src="/static/logo.png" alt="Logo" class="w-56 h-56 mx-auto mb-4">
+        </header>
+
+        <!-- Action Buttons -->
+        <div id="action-buttons" class="flex flex-col space-y-12 mb-8">
+            <button id="upload-btn" class="bg-white text-blue-400 border-4 border-blue-400 rounded-full px-10 py-4 font-bold shadow-lg hover:bg-blue-100 transition-transform transform hover:scale-105"><b>Upload</b></button>
+            <button id="camera-btn" class="bg-white text-blue-400 border-4 border-blue-400 rounded-full px-10 py-4 font-bold shadow-lg hover:bg-blue-100 transition-transform transform hover:scale-105"><b>Camera</b></button>
+        </div>
+        <input type="file" id="file-input" accept="image/*" class="hidden">
+
+        <!-- Camera View -->
+        <div id="camera-view" class="hidden w-full text-center">
+            <video id="video" class="w-full max-w-lg mx-auto rounded-lg shadow-lg" autoplay playsinline></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            <button id="capture-btn" class="mt-6 bg-red-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-red-700 transition-transform transform hover:scale-105">Capture</button>
+            <button id="cancel-camera-btn" class="mt-6 bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700">Cancel</button>
+        </div>
+
+        <!-- Cropper Modal -->
+        <div id="cropper-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-40 p-4">
+            <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg text-center">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Crop Image</h2>
+                <div id="image-container" class="w-full h-64 md:h-96"></div>
+                <div class="flex justify-center space-x-4 mt-6">
+                    <button id="crop-confirm-btn" class="bg-blue-600 text-white py-2 px-6 rounded-lg font-semibold hover:bg-blue-700">Crop & Predict</button>
+                    <button id="crop-cancel-btn" class="bg-gray-300 text-gray-800 py-2 px-6 rounded-lg font-semibold hover:bg-gray-400">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loader -->
+        <div id="loader" class="hidden my-8">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
+            <p class="text-center text-gray-600 mt-4">Analyzing Image...</p>
+        </div>
+
+        <!-- Result Section -->
+        <div id="result-container" class="hidden bg-white p-8 rounded-lg shadow-lg w-full text-center transition-all duration-500">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Prediction Result</h2>
+            <img id="result-image" src="" alt="Uploaded Image" class="rounded-lg shadow-md mx-auto max-w-full h-auto mb-6">
+            <div id="prediction-text" class="text-3xl font-bold mb-2"></div>
+            <div id="confidence-text" class="text-xl text-gray-600 mb-6"></div>
+            <button id="reset-btn" class="w-full max-w-md mx-auto bg-gray-700 text-white py-3 rounded-lg font-semibold hover:bg-gray-800">Try Another Image</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
+    <script>
+        // Page Elements
+        const loadingScreen = document.getElementById('loading-screen');
+        const mainContent = document.getElementById('main-content');
+        const actionButtons = document.getElementById('action-buttons');
+        const uploadBtn = document.getElementById('upload-btn');
+        const cameraBtn = document.getElementById('camera-btn');
+        const fileInput = document.getElementById('file-input');
+        
+        // Camera Elements
+        const cameraView = document.getElementById('camera-view');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('capture-btn');
+        const cancelCameraBtn = document.getElementById('cancel-camera-btn');
+        let stream;
+
+        // Cropper Elements
+        const cropperModal = document.getElementById('cropper-modal');
+        const imageContainer = document.getElementById('image-container');
+        const cropConfirmBtn = document.getElementById('crop-confirm-btn');
+        const cropCancelBtn = document.getElementById('crop-cancel-btn');
+        let cropper;
+
+        // Result Elements
+        const loader = document.getElementById('loader');
+        const resultContainer = document.getElementById('result-container');
+        const resultImage = document.getElementById('result-image');
+        const predictionText = document.getElementById('prediction-text');
+        const confidenceText = document.getElementById('confidence-text');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // --- Initial Load ---
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                loadingScreen.classList.add('opacity-0');
+                setTimeout(() => {
+                    loadingScreen.classList.add('hidden');
+                    mainContent.classList.remove('hidden');
+                }, 1000);
+            }, 2000); // Simulate loading time
+        });
+
+        // --- Button Listeners ---
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        cameraBtn.addEventListener('click', startCamera);
+        captureBtn.addEventListener('click', captureImage);
+        cancelCameraBtn.addEventListener('click', stopCamera);
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+        cropConfirmBtn.addEventListener('click', performCropAndPredict);
+        cropCancelBtn.addEventListener('click', cancelCrop);
+        resetBtn.addEventListener('click', resetView);
+
+        // --- Camera Logic ---
+        async function startCamera() {
+            try {
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    video.srcObject = stream;
+                    actionButtons.classList.add('hidden');
+                    cameraView.classList.remove('hidden');
+                } else {
+                    alert('Your browser does not support camera access.');
+                }
+            } catch (error) {
+                console.error("Error accessing camera: ", error);
+                alert('Could not access the camera. Please ensure you have given permission.');
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            cameraView.classList.add('hidden');
+            actionButtons.classList.remove('hidden');
+        }
+
+        function captureImage() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            stopCamera();
+            const dataUrl = canvas.toDataURL('image/jpeg');
+            showCropper(dataUrl);
+        }
+
+        // --- Cropper Logic ---
+        function handleFile(file) {
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    showCropper(event.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function showCropper(source) {
+            actionButtons.classList.add('hidden');
+            cropperModal.classList.remove('hidden');
+            imageContainer.innerHTML = `<img id="image-to-crop" src="${source}" class="max-w-full h-auto">`;
+            const image = document.getElementById('image-to-crop');
+            
+            if (cropper) {
+                cropper.destroy();
+            }
+
+            cropper = new Cropper(image, {
+                aspectRatio: 1,
+                viewMode: 1,
+                background: false,
+                autoCropArea: 0.8,
+            });
+        }
+
+        function cancelCrop() {
+            cropperModal.classList.add('hidden');
+            actionButtons.classList.remove('hidden');
+            if (cropper) {
+                cropper.destroy();
+            }
+            fileInput.value = ''; // Reset file input
+        }
+
+        function performCropAndPredict() {
+            if (!cropper) return;
+
+            cropperModal.classList.add('hidden');
+            loader.classList.remove('hidden');
+
+            cropper.getCroppedCanvas({ width: 224, height: 224 }).toBlob((blob) => {
+                const formData = new FormData();
+                formData.append('file', blob, 'cropped_image.jpg');
+
+                fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    loader.classList.add('hidden');
+                    if (data.error) {
+                        alert(`Error: ${data.error}`);
+                        resetView();
+                        return;
+                    }
+                    displayResult(data);
+                })
+                .catch(error => {
+                    loader.classList.add('hidden');
+                    alert(`An unexpected error occurred: ${error}`);
+                    resetView();
+                });
+            });
+        }
+
+        // --- Result & Reset Logic ---
+        function displayResult(data) {
+            resultImage.src = `data:image/jpeg;base64,${data.image}`;
+            predictionText.textContent = `Prediction: ${data.prediction}`;
+            confidenceText.textContent = `Confidence: ${data.confidence}%`;
+            resultContainer.classList.remove('hidden');
+        }
+
+        function resetView() {
+            resultContainer.classList.add('hidden');
+            actionButtons.classList.remove('hidden');
+            if (cropper) {
+                cropper.destroy();
+            }
+            fileInput.value = '';
+        }
+    </script>
+</body>
+</html>
