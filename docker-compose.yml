@@ -1,0 +1,7 @@
+services:
+  deepfish:
+    container_name: deepfish
+    build: .
+    ports:
+      - "8080:8000"
+    restart: always
