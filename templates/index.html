@@ -40,6 +40,22 @@
         <header class="text-center mb-8">
             <img src="/static/logo.png" alt="Logo" class="w-56 h-56 mx-auto mb-4">
         </header>
+        <!-- Fish Category -->
+        <div class="w-full max-w-md mb-8">
+            <select id="fish-type"
+                class="w-full p-3 border-2 border-blue-400 rounded-lg text-center text-gray-700 font-semibold">
+                <option value="">-- Pilih Jenis Ikan --</option>
+                <option value="Chanos Chanos (Bandeng)">Chanos Chanos (Bandeng)</option>
+                <option value="Eleutheronema Tetradactylum (Senangin)">Eleutheronema Tetradactylum (Senangin)</option>
+                <option value="Johnius Trachycephalus (Gulamah)">Johnius Trachycephalus (Gulamah)</option>
+                <option value="Nibea Albiflora (Tigawaja Putih)">Nibea Albiflora (Tigawaja Putih)</option>
+                <option value="Oreochromis Mossambicus (Mujair)">Oreochromis Mossambicus (Mujair)</option>
+                <option value="Oreochromis Niloticus (Nila)">Oreochromis Niloticus (Nila)</option>
+                <option value="Rastrelliger Faughni (Kembung)">Rastrelliger Faughni (Kembung)</option>
+                <option value="Upeneus Moluccensis (Kuniran)">Upeneus Moluccensis (Kuniran)</option>
+            </select>
+        </div>
+
 
         <!-- Action Buttons -->
         <div id="action-buttons" class="flex flex-col space-y-12 mb-8">
@@ -93,6 +109,8 @@
         const uploadBtn = document.getElementById('upload-btn');
         const cameraBtn = document.getElementById('camera-btn');
         const fileInput = document.getElementById('file-input');
+        const fishTypeSelect = document.getElementById('fish-type');
+
         
         // Camera Elements
         const cameraView = document.getElementById('camera-view');
@@ -214,12 +232,19 @@
         function performCropAndPredict() {
             if (!cropper) return;
 
+            const fishType = fishTypeSelect.value;
+            if (!fishType) {
+                alert("Silakan pilih jenis ikan terlebih dahulu");
+                return;
+            }
+
             cropperModal.classList.add('hidden');
             loader.classList.remove('hidden');
 
             cropper.getCroppedCanvas({ width: 224, height: 224 }).toBlob((blob) => {
                 const formData = new FormData();
                 formData.append('file', blob, 'cropped_image.jpg');
+                formData.append('fish_type', fishType); // ⬅️ KIRIM KE BACKEND
 
                 fetch('/predict', {
                     method: 'POST',
@@ -237,7 +262,7 @@
                 })
                 .catch(error => {
                     loader.classList.add('hidden');
-                    alert(`An unexpected error occurred: ${error}`);
+                    alert(`Terjadi kesalahan: ${error}`);
                     resetView();
                 });
             });
@@ -246,10 +271,13 @@
         // --- Result & Reset Logic ---
         function displayResult(data) {
             resultImage.src = `data:image/jpeg;base64,${data.image}`;
-            predictionText.textContent = `Prediction: ${data.prediction}`;
-            confidenceText.textContent = `Confidence: ${data.confidence}%`;
+            predictionText.textContent = 
+                `Jenis Ikan: ${data.fish_type} | Hasil: ${data.prediction}`;
+            confidenceText.textContent = 
+                `Confidence: ${data.confidence}%`;
             resultContainer.classList.remove('hidden');
         }
+
 
         function resetView() {
             resultContainer.classList.add('hidden');
